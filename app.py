@@ -139,3 +139,7 @@ with tab2:
                      marker=dict(size=12, color=BARCA_RED), name=player2)
     base.update_layout(title='xG vs xA (jugadores resaltados)')
     st.plotly_chart(base, use_container_width=True)
+
+
+
+    
