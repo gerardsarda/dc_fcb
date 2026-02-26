@@ -281,7 +281,7 @@ elif opcion_menu == "⚔️ Cara a Cara (1vs1)":
                 showlegend=False, margin=dict(l=10, r=10, t=30, b=10),
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.6)', font=dict(color='white')
             )
-            st.plotly_chart(fig_xgxa, use_container_width=True)c
+            st.plotly_chart(fig_xgxa, use_container_width=True)
 
 
 
