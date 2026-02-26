@@ -26,16 +26,17 @@ df = load_data()
 if df.empty:
     st.stop()
 
-# --- 3. BARRA LATERAL (AJUSTE DE PESOS) ---
+# --- 3. BARRA LATERAL (NAVEGACIÓN) ---
 st.sidebar.title("🔵🔴 FCB Scouting")
-st.sidebar.header("⚙️ Ajuste de Pesos")
+st.sidebar.markdown("---")
+opcion_menu = st.sidebar.radio(
+    "Navegación:",
+    ["🏆 Ranking Top Fichajes", "📈 Gráficos de Rendimiento", "⚔️ Cara a Cara (1vs1)"]
+)
+st.sidebar.markdown("---")
+st.sidebar.info("Algoritmo optimizado para el FC Barcelona.")
 
-weight_attack = st.sidebar.slider("Ataque y Creación", 0.0, 10.0, 4.0, 0.5)
-weight_pressure = st.sidebar.slider("Presión Alta", 0.0, 10.0, 2.0, 0.5)
-weight_consistency = st.sidebar.slider("Consistencia/Minutos", 0.0, 10.0, 3.0, 0.5)
-weight_penalty = st.sidebar.slider("Penalizaciones (Edad, Pérdidas)", 0.0, 10.0, 1.0, 0.5)
-
-# --- 4. LÓGICA DE CÁLCULO EN VIVO ---
+# --- 4. LÓGICA DE CÁLCULO (PESOS FIJOS) ---
 stats_ataque = ['xg', 'xa', 'toques_area_rival', 'oport_creadas', 'gr_oport_creadas', 'regates_pct']
 stats_presion = ['recuperaciones', 'pos_gan_tercio_of']
 stats_consistencia = ['minutos']
@@ -47,6 +48,12 @@ columnas_validas = [col for col in todas_las_metricas if col in df.columns]
 scaler = MinMaxScaler()
 df_scaled = df.copy()
 df_scaled[columnas_validas] = scaler.fit_transform(df[columnas_validas])
+
+# Pesos fijos
+weight_attack = 4.0
+weight_pressure = 2.0
+weight_consistency = 3.0
+weight_penalty = 1.0
 
 # Calcular componentes
 score_ataque = df_scaled[[c for c in stats_ataque if c in df.columns]].sum(axis=1) * weight_attack
@@ -62,13 +69,9 @@ df['Indice_Barca_Final'] = indice_scaler.fit_transform(df[['Indice_Bruto']])
 # Limpiar tabla
 df_ranking = df.sort_values(by='Indice_Barca_Final', ascending=False).reset_index(drop=True)
 
-# --- 5. ESTRUCTURA DE LA APP (PESTAÑAS) ---
-tab1, tab2, tab3 = st.tabs(["🏆 Ranking", "📈 Gráficos", "⚔️ Cara a Cara"])
+# --- 5. VISTAS DE LA APP ---
 
-# ==================================
-# PESTAÑA 1: RANKING
-# ==================================
-with tab1:
+if opcion_menu == "🏆 Ranking Top Fichajes":
     st.header("🏆 Top Fichajes (Algoritmo Barça)")
     cols_vista = ['jugador', 'Indice_Barca_Final', 'edad', 'minutos', 'xg', 'oport_creadas', 'recuperaciones']
     cols_vista = [c for c in cols_vista if c in df_ranking.columns]
@@ -78,10 +81,7 @@ with tab1:
         use_container_width=True, height=500
     )
 
-# ==================================
-# PESTAÑA 2: GRÁFICOS
-# ==================================
-with tab2:
+elif opcion_menu == "📈 Gráficos de Rendimiento":
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Rendimiento vs Juventud")
@@ -103,10 +103,7 @@ with tab2:
         fig2.update_traces(textposition='top center')
         st.plotly_chart(fig2, use_container_width=True)
 
-# ==================================
-# PESTAÑA 3: CARA A CARA (FOTOS Y RADAR)
-# ==================================
-with tab3:
+elif opcion_menu == "⚔️ Cara a Cara (1vs1)":
     st.header("⚔️ Comparativa Directa")
     
     col_s1, col_s2 = st.columns(2)
@@ -121,16 +118,21 @@ with tab3:
 
     st.markdown("---")
 
-    # --- FOTOS ---
+    # --- FOTOS (RUTAS ABSOLUTAS Y MULTI-EXTENSIÓN) ---
     col_img1, col_img2 = st.columns(2)
     silueta_default = "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
     
+    # Obtenemos la ruta exacta de donde está corriendo la aplicación
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    
     def obtener_ruta_foto(nombre_jugador):
-        ruta_png = f"fotos/{nombre_jugador}.png"
-        ruta_jpg = f"fotos/{nombre_jugador}.jpg"
-        if os.path.exists(ruta_png): return ruta_png
-        elif os.path.exists(ruta_jpg): return ruta_jpg
-        else: return silueta_default
+        # Probamos todas las extensiones habituales por si acaso
+        extensiones = ['.png', '.jpg', '.jpeg', '.PNG', '.JPG']
+        for ext in extensiones:
+            ruta = os.path.join(base_dir, "fotos", f"{nombre_jugador}{ext}")
+            if os.path.exists(ruta):
+                return ruta
+        return silueta_default
 
     with col_img1:
         _, c1, _ = st.columns([1, 2, 1])
@@ -202,6 +204,7 @@ with tab3:
             
             fig_xgxa.update_layout(xaxis_title="Goles Esperados (xG)", yaxis_title="Asistencias Esperadas (xA)", showlegend=False, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_xgxa, use_container_width=True)
+            
 
 
 
