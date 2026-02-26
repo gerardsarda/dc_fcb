@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import os
 import unicodedata
 
-# --- 1. CONFIGURACIÓN Y CSS (Fondo de Césped y Textos) ---
+# --- 1. CONFIGURACIÓN Y CSS (Fondo, Escudo y Pestañas) ---
 st.set_page_config(page_title="Dashboard Scouting Barça", layout="wide", page_icon="🔵🔴")
 
 st.markdown("""
@@ -29,11 +29,29 @@ st.markdown("""
         ) !important;
     }
 
-    [data-testid="stSidebar"] {
-        background-color: #1A3D1A !important; 
+    /* PESTAÑAS (TABS) BLANCAS Y ESTILO BARÇA */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 5px;
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: rgba(26, 61, 26, 0.8) !important; /* Verde oscuro para que el texto blanco resalte */
+        border-radius: 8px 8px 0px 0px;
+        padding: 10px 20px;
+        border: none !important;
+    }
+    .stTabs [data-baseweb="tab"] p {
+        color: #FFFFFF !important; /* Nombres de pestañas en blanco */
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+    }
+    /* Pestaña activa (seleccionada) */
+    .stTabs [aria-selected="true"] {
+        background-color: #A50044 !important; /* Fondo Grana */
+        border-bottom: 4px solid #EDBB00 !important; /* Línea Amarilla */
     }
     
-    h1, h2, h3, .stMarkdown p, .stRadio label {
+    h1, h2, h3, .stMarkdown p {
         color: #FFFFFF !important;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
     }
@@ -50,6 +68,11 @@ BARCA_BLUE = "#004D98"
 BARCA_RED = "#A50044"
 BARCA_YELLOW = "#EDBB00"
 
+# --- ESCUDO DEL BARÇA CENTRADO ---
+col_logo1, col_logo2, col_logo3 = st.columns([4, 1, 4])
+with col_logo2:
+    st.image("https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/300px-FC_Barcelona_%28crest%29.svg.png", use_container_width=True)
+
 # --- 2. CARGA DE DATOS ---
 @st.cache_data
 def load_data():
@@ -65,16 +88,7 @@ if df.empty:
     st.warning("No hay datos cargados.")
     st.stop()
 
-# --- 3. BARRA LATERAL ---
-st.sidebar.title("⚽ FCB Scouting")
-st.sidebar.markdown("---")
-opcion_menu = st.sidebar.radio(
-    "Navegación:",
-    ["🏆 Ranking Top Fichajes", "📈 Gráficos e Insights", "⚔️ Cara a Cara (1vs1)"]
-)
-st.sidebar.markdown("---")
-
-# --- 4. CÁLCULO DEL ALGORITMO ---
+# --- 3. CÁLCULO DEL ALGORITMO ---
 stats_ataque = ['xg', 'xa', 'toques_area_rival', 'oport_creadas', 'gr_oport_creadas', 'regates_pct']
 stats_presion = ['recuperaciones', 'pos_gan_tercio_of']
 stats_consistencia = ['minutos']
@@ -99,9 +113,13 @@ df['Indice_Barca_Final'] = MinMaxScaler(feature_range=(0, 100)).fit_transform(df
 
 df_ranking = df.sort_values(by='Indice_Barca_Final', ascending=False).reset_index(drop=True)
 
-# --- 5. VISTAS DE LA APP ---
+# --- 4. ESTRUCTURA DE PESTAÑAS (TABS) ---
+tab1, tab2, tab3 = st.tabs(["🏆 Ranking Top Fichajes", "📈 Gráficos e Insights", "⚔️ Cara a Cara (1vs1)"])
 
-if opcion_menu == "🏆 Ranking Top Fichajes":
+# ==================================
+# PESTAÑA 1: RANKING
+# ==================================
+with tab1:
     st.header("🏆 Top Fichajes (Algoritmo Barça)")
     cols_vista = ['jugador', 'Indice_Barca_Final', 'edad', 'minutos', 'xg', 'oport_creadas', 'recuperaciones']
     cols_vista = [c for c in cols_vista if c in df_ranking.columns]
@@ -111,7 +129,10 @@ if opcion_menu == "🏆 Ranking Top Fichajes":
         use_container_width=True, height=450
     )
 
-elif opcion_menu == "📈 Gráficos e Insights":
+# ==================================
+# PESTAÑA 2: GRÁFICOS
+# ==================================
+with tab2:
     st.header("📊 Top 5 Jugadores por Categoría")
     
     diccionario_metricas = {
@@ -163,7 +184,10 @@ elif opcion_menu == "📈 Gráficos e Insights":
         fig2.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.6)', font=dict(color='white'))
         st.plotly_chart(fig2, use_container_width=True)
 
-elif opcion_menu == "⚔️ Cara a Cara (1vs1)":
+# ==================================
+# PESTAÑA 3: CARA A CARA
+# ==================================
+with tab3:
     st.header("⚔️ Comparativa Directa")
     
     col_s1, col_s2 = st.columns(2)
@@ -184,25 +208,16 @@ elif opcion_menu == "⚔️ Cara a Cara (1vs1)":
     
     def limpiar_nombre(nombre):
         """Convierte 'Julián Álvarez' en 'julian_alvarez'"""
-        # Quita acentos
         nombre_limpio = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
-        # Pasa a minúsculas y cambia espacios por guiones bajos
         return nombre_limpio.lower().replace(" ", "_")
 
     def obtener_ruta_foto(nombre):
         nombre_formateado = limpiar_nombre(nombre)
-        
         for ext in ['.png', '.jpg', '.jpeg']:
-            # Intenta buscar 'julian_alvarez.png'
             ruta_formateada = f"fotos/{nombre_formateado}{ext}"
-            if os.path.exists(ruta_formateada):
-                return ruta_formateada
-                
-            # Intenta buscar 'Julián Álvarez.png' por si acaso
+            if os.path.exists(ruta_formateada): return ruta_formateada
             ruta_original = f"fotos/{nombre.strip()}{ext}"
-            if os.path.exists(ruta_original):
-                return ruta_original
-                
+            if os.path.exists(ruta_original): return ruta_original
         return silueta_default
 
     with col_img1:
