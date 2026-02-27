@@ -262,10 +262,12 @@ with tab3:
     col_img1, col_img2 = st.columns(2)
     with col_img1:
         _, c1, _ = st.columns([1, 2, 1])
-        with c1: st.image(obtener_ruta_foto(jugador1), use_container_width=True, caption=jugador1)
+        # SE AÑADE object-position: top; AQUÍ TAMBIÉN POR SEGURIDAD
+        with c1: st.markdown(f'<img src="{get_img_html(obtener_ruta_foto(jugador1))}" style="width: 100%; height: auto; border-radius: 10px; object-fit: cover; object-position: top; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">', unsafe_allow_html=True)
     with col_img2:
         _, c2, _ = st.columns([1, 2, 1])
-        with c2: st.image(obtener_ruta_foto(jugador2), use_container_width=True, caption=jugador2)
+        # SE AÑADE object-position: top; AQUÍ TAMBIÉN POR SEGURIDAD
+        with c2: st.markdown(f'<img src="{get_img_html(obtener_ruta_foto(jugador2))}" style="width: 100%; height: auto; border-radius: 10px; object-fit: cover; object-position: top; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">', unsafe_allow_html=True)
 
     col_g1, col_g2 = st.columns(2)
     with col_g1:
@@ -320,6 +322,7 @@ with tab3:
             fig_xgxa.update_layout(xaxis_title="Goles Esperados (xG)", yaxis_title="Asistencias Esperadas (xA)", showlegend=False, margin=dict(l=10, r=10, t=30, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
             st.plotly_chart(fig_xgxa, use_container_width=True)
 
+
 # ==================================
 # PESTAÑA 4: INSIGNIAS
 # ==================================
@@ -340,7 +343,7 @@ with tab4:
         <div style="background: rgba(0,0,0,0.5); border: 2px solid {color_borde}; border-radius: 15px; padding: 25px 15px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.4); margin-bottom: 20px;">
             <div style="font-size: 3.5rem; margin-bottom: 5px;">{icono}</div>
             <h3 style="color: {color_borde}; margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 2px; font-size: 1.2rem;">{titulo}</h3>
-            <img src="{foto_base64}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: 4px solid {color_borde}; margin-bottom: 15px; background-color: #fff;">
+            <img src="{foto_base64}" style="width: 140px; height: 140px; object-fit: cover; object-position: top; border-radius: 50%; border: 4px solid {color_borde}; margin-bottom: 15px; background-color: #fff;">
             <h2 style="color: white; margin: 0 0 10px 0; font-size: 1.6rem;">{jugador_row['jugador']}</h2>
             <div style="background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 10px;">
                 <p style="color: #ccc; font-size: 0.9rem; margin: 0;">{nombre_stat}</p>
@@ -406,7 +409,7 @@ with tab5:
                 foto_t = get_img_html(obtener_ruta_foto(jugador_elite))
                 tarjeta_html_t = f"""
                 <div style="background: rgba(165,0,68,0.7); border: 2px solid {BARCA_YELLOW}; border-radius: 15px; padding: 25px 15px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.5);">
-                    <img src="{foto_t}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: 4px solid {BARCA_YELLOW}; margin-bottom: 15px; background-color: #fff;">
+                    <img src="{foto_t}" style="width: 140px; height: 140px; object-fit: cover; object-position: top; border-radius: 50%; border: 4px solid {BARCA_YELLOW}; margin-bottom: 15px; background-color: #fff;">
                     <h3 style="color: white; margin: 0; font-size: 1.5rem;">{jugador_elite}</h3>
                     <p style="color: {BARCA_YELLOW}; margin-top: 5px; font-weight: bold;">Élite Mundial</p>
                 </div>
@@ -427,7 +430,7 @@ with tab5:
                     tarjeta_html_c = f"""
                     <div style="background: rgba(0,0,0,0.5); border: 2px solid {color_c}; border-radius: 15px; padding: 25px 15px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.4);">
                         <h3 style="color: {color_c}; margin: 0 0 15px 0; font-size: 1.6rem;">{sim:.1f}% Match</h3>
-                        <img src="{foto_c}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: 4px solid {color_c}; margin-bottom: 15px; background-color: #fff;">
+                        <img src="{foto_c}" style="width: 140px; height: 140px; object-fit: cover; object-position: top; border-radius: 50%; border: 4px solid {color_c}; margin-bottom: 15px; background-color: #fff;">
                         <h3 style="color: white; margin: 0 0 10px 0; font-size: 1.4rem;">{row['jugador']}</h3>
                         <p style="color: #ccc; font-size: 0.9rem; margin: 0;">{row['edad']} años | Score: {row['Indice_Barca_Final']:.1f}</p>
                     </div>
@@ -435,7 +438,7 @@ with tab5:
                     st.markdown(tarjeta_html_c, unsafe_allow_html=True)
         else:
             st.warning("No he encontrado estadísticas suficientes en común entre los Excels para poder compararlos.")
-            
+
 
 
 
