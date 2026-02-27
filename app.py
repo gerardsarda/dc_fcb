@@ -74,26 +74,39 @@ def load_data():
         path_goles = os.path.join(script_dir, "evolucio_gols_dc.csv")
         
         df_main = pd.read_csv(path_main)
-        try:
-            df_goles = pd.read_csv(path_goles)
-            
-            # Limpiamos nombres para unirlos perfectamente
-            df_main['match_name'] = df_main['jugador'].apply(limpiar_nombre)
-            df_goles['match_name'] = df_goles['Jugadores'].apply(limpiar_nombre)
-            
-            # Columnas a traernos del excel de goles
-            cols_goles = ['match_name', 'Goles_5_y', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
-            
-            df = pd.merge(df_main, df_goles[cols_goles], on='match_name', how='left')
-            df = df.drop(columns=['match_name'])
-            
-            # Rellenamos huecos con 0 si algún jugador no tiene datos
-            df['Goles_5_y'] = df['Goles_5_y'].fillna(0)
-            for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']:
-                df[col] = df[col].fillna(0)
+        
+        df_goles = None
+        if os.path.exists(path_goles):
+            try:
+                df_goles = pd.read_csv(path_goles)
+            except Exception as e:
+                print(f"Error cargando archivo de goles: {e}")
+                df_goles = None
+        
+        # Si tenemos archivo de goles, hacemos el merge
+        if df_goles is not None:
+            try:
+                # Limpiamos nombres para unirlos perfectamente
+                df_main['match_name'] = df_main['jugador'].apply(limpiar_nombre)
+                df_goles['match_name'] = df_goles['Jugadores'].apply(limpiar_nombre)
                 
-        except Exception as e:
-            st.warning("No se encontró el archivo de goles históricos. Usando solo datos base.")
+                # Columnas a traernos del excel de goles
+                cols_goles = ['match_name', 'Goles_5_y', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
+                
+                df = pd.merge(df_main, df_goles[cols_goles], on='match_name', how='left')
+                df = df.drop(columns=['match_name'])
+                
+                # Rellenamos huecos con 0 si algún jugador no tiene datos
+                df['Goles_5_y'] = df['Goles_5_y'].fillna(0)
+                for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']:
+                    df[col] = df[col].fillna(0)
+            except Exception as e:
+                print(f"Error en merge de goles: {e}")
+                df = df_main
+                df['Goles_5_y'] = 0
+                for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: 
+                    df[col] = 0
+        else:
             df = df_main
             df['Goles_5_y'] = 0
             for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: df[col] = 0
