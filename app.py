@@ -68,7 +68,7 @@ def limpiar_nombre(nombre):
 @st.cache_data
 def load_data():
     try:
-        df_main = pd.read_csv("dataset_fcb_final_app.csv")
+        df_main = pd.read_csv("dataset_fcb_actualizado_con_goles.csv")
         try:
             df_goles = pd.read_csv("evolucio_gols_dc - Full 1.csv")
             
@@ -313,7 +313,7 @@ with tab3:
             fig_xgxa.update_layout(xaxis_title="Goles Esperados (xG)", yaxis_title="Asistencias Esperadas (xA)", showlegend=False, margin=dict(l=10, r=10, t=30, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
             st.plotly_chart(fig_xgxa, use_container_width=True)
 
-            
+
 
 
 
