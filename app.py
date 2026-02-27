@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics.pairwise import cosine_similarity
 import plotly.express as px
 import plotly.graph_objects as go
 import os
@@ -18,7 +19,6 @@ st.markdown("""
         font-family: 'Outfit', sans-serif !important;
     }
 
-    /* Fondo principal: Degradado Grana a Azul */
     .stApp {
         background: linear-gradient(135deg, #A50044 0%, #004D98 100%) !important;
         background-attachment: fixed !important;
@@ -55,7 +55,6 @@ BARCA_BLUE = "#004D98"
 BARCA_RED = "#A50044"
 BARCA_YELLOW = "#EDBB00"
 
-# --- ESCUDO DEL BARÇA ---
 col_logo1, col_logo2, col_logo3 = st.columns([4, 1, 4])
 with col_logo2:
     st.image("https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/300px-FC_Barcelona_%28crest%29.svg.png", use_container_width=True)
@@ -80,25 +79,21 @@ def load_data():
             try:
                 df_goles = pd.read_csv(path_goles)
                 df_goles.columns = df_goles.columns.str.strip()
-            except Exception as e:
-                print(f"Error cargando archivo de goles: {e}")
+            except:
                 df_goles = None
         
         if df_goles is not None:
             try:
                 df_main['match_name'] = df_main['jugador'].apply(limpiar_nombre)
                 df_goles['match_name'] = df_goles['Jugadores'].apply(limpiar_nombre)
-                
                 cols_goles = ['match_name', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
-                
                 df = pd.merge(df_main, df_goles[cols_goles], on='match_name', how='left')
                 df = df.drop(columns=['match_name'])
                 
                 for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']:
                     if col in df.columns:
                         df[col] = df[col].fillna(0).astype(int)
-            except Exception as e:
-                print(f"Error en merge de goles: {e}")
+            except:
                 df = df_main
                 for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: df[col] = 0
         else:
@@ -110,7 +105,36 @@ def load_data():
         st.error(f"Error cargando datos principales: {e}")
         return pd.DataFrame()
 
+@st.cache_data
+def load_top5_data():
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        path_top5 = os.path.join(script_dir, "dataset_top5.csv")
+        
+        if os.path.exists(path_top5):
+            df_t5 = pd.read_csv(path_top5)
+            df_t5.columns = df_t5.columns.str.strip()
+            
+            # Renombrar columnas para asegurar que matchean con las de tu BD principal
+            rename_dict = {
+                'grandes_oport_creadas': 'gr_oport_creadas',
+                'regates_realizados_pct': 'regates_pct',
+                'posesion_tercio_ofen': 'pos_gan_tercio_of'
+            }
+            df_t5 = df_t5.rename(columns=rename_dict)
+            
+            # Transformar formato europeo a Python (quitar % y cambiar , por .)
+            for col in df_t5.columns:
+                if col != 'jugador':
+                    df_t5[col] = df_t5[col].astype(str).str.replace('%', '').str.replace(',', '.').astype(float)
+            return df_t5
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error cargando top 5: {e}")
+        return pd.DataFrame()
+
 df = load_data()
+df_top5_data = load_top5_data()
 
 if df.empty:
     st.stop()
@@ -140,7 +164,7 @@ df['Indice_Barca_Final'] = MinMaxScaler(feature_range=(0, 100)).fit_transform(df
 
 df_ranking = df.sort_values(by='Indice_Barca_Final', ascending=False).reset_index(drop=True)
 
-# --- FUNCIONES PARA FOTOS Y TARJETAS ---
+# --- FUNCIONES PARA FOTOS ---
 silueta_default = "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
 
 def obtener_ruta_foto(nombre):
@@ -152,19 +176,17 @@ def obtener_ruta_foto(nombre):
         if os.path.exists(ruta_original): return ruta_original
     return silueta_default
 
-# Función para incrustar la foto local en un HTML (Base64)
 def get_img_html(ruta):
-    if ruta.startswith("http"):
-        return ruta
+    if ruta.startswith("http"): return ruta
     try:
         with open(ruta, "rb") as img_file:
-            encoded = base64.b64encode(img_file.read()).decode()
-            return f"data:image/png;base64,{encoded}"
+            return f"data:image/png;base64,{base64.b64encode(img_file.read()).decode()}"
     except:
         return silueta_default
 
 # --- 4. ESTRUCTURA DE PESTAÑAS (TABS) ---
-tab1, tab2, tab3, tab4 = st.tabs(["🏆 Ranking", "📈 Gráficos", "⚔️ Cara a Cara", "🏅 Insignias"])
+# ¡Aquí añadimos la nueva pestaña 5!
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 Ranking", "📈 Gráficos", "⚔️ Cara a Cara", "🏅 Insignias", "🧬 Clonador Perfiles"])
 
 # ==================================
 # PESTAÑA 1: RANKING
@@ -208,12 +230,7 @@ with tab2:
     
     if metrica_seleccionada in df.columns:
         top5 = df.nlargest(5, metrica_seleccionada).sort_values(by=metrica_seleccionada, ascending=True)
-        
-        fig_bar = px.bar(
-            top5, x=metrica_seleccionada, y='jugador', orientation='h',
-            text=metrica_seleccionada,
-            labels={'jugador': '', metrica_seleccionada: diccionario_metricas[metrica_seleccionada]}
-        )
+        fig_bar = px.bar(top5, x=metrica_seleccionada, y='jugador', orientation='h', text=metrica_seleccionada, labels={'jugador': '', metrica_seleccionada: diccionario_metricas[metrica_seleccionada]})
         fig_bar.update_traces(marker_color=BARCA_YELLOW, texttemplate='%{text:.2f}', textposition='outside', textfont=dict(color='white'))
         fig_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', height=350, font=dict(color='white'))
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -223,7 +240,6 @@ with tab2:
 # ==================================
 with tab3:
     st.header("⚔️ Comparativa Directa")
-    
     col_s1, col_s2 = st.columns(2)
     with col_s1: jugador1 = st.selectbox("🔴 Jugador 1", df_ranking['jugador'].tolist(), index=0)
     with col_s2:
@@ -234,7 +250,6 @@ with tab3:
     p2_data = df_ranking[df_ranking['jugador'] == jugador2].iloc[0]
 
     st.markdown("---")
-
     col_img1, col_img2 = st.columns(2)
     with col_img1:
         _, c1, _ = st.columns([1, 2, 1])
@@ -254,7 +269,6 @@ with tab3:
         st.plotly_chart(fig_g2, use_container_width=True)
 
     st.markdown("---")
-
     st.subheader("📈 Evolución Goleadora (Últimas 5 Temporadas)")
     temporadas = ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
     if all(temp in df.columns for temp in temporadas):
@@ -265,18 +279,14 @@ with tab3:
         fig_line.update_traces(line=dict(width=4), marker=dict(size=10, line=dict(width=2, color='white')))
         fig_line.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'), hovermode="x unified", yaxis=dict(rangemode="tozero"))
         st.plotly_chart(fig_line, use_container_width=True)
-    else:
-        st.info("No hay datos de evolución por temporadas disponibles para estos jugadores.")
 
     st.markdown("---")
-
     col_rad, col_sca = st.columns(2)
     with col_rad:
         st.subheader("Radar de Perfil")
         radar_cols = ['xg', 'xa', 'oport_creadas', 'regates_pct', 'recuperaciones', 'toques_area_rival']
         nombres_ejes = ['Goles Esp. (xG)', 'Asist. Esp. (xA)', 'Creación', 'Regate %', 'Recuperaciones', 'Toques Área']
         radar_cols_validas = [c for c in radar_cols if c in df.columns]
-        
         if radar_cols_validas:
             df_percentiles = df[radar_cols_validas].rank(pct=True) * 100
             df_percentiles['jugador'] = df['jugador']
@@ -303,34 +313,21 @@ with tab3:
 
 
 # ==================================
-# PESTAÑA 4: INSIGNIAS (NUEVO)
+# PESTAÑA 4: INSIGNIAS
 # ==================================
 with tab4:
     st.header("🏅 Salón de Insignias")
-    st.markdown("El algoritmo ha analizado toda la base de datos para premiar a los perfiles más puros en cada estilo de juego.", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # --- CÁLCULO DE LOS GANADORES ---
-    # 1. Francotirador (El que más Goles históricos tiene)
+    
     ganador_francotirador = df_ranking.nlargest(1, 'Goles_5_y').iloc[0] if 'Goles_5_y' in df_ranking.columns else df_ranking.iloc[0]
-    
-    # 2. Mago (El que más Oportunidades crea)
     ganador_mago = df_ranking.nlargest(1, 'oport_creadas').iloc[0] if 'oport_creadas' in df_ranking.columns else df_ranking.iloc[0]
-    
-    # 3. Pulpo (El que más Balones recupera)
     ganador_pulpo = df_ranking.nlargest(1, 'recuperaciones').iloc[0] if 'recuperaciones' in df_ranking.columns else df_ranking.iloc[0]
     
-    # 4. Joya (El de mayor Score del Barça con 22 años o menos)
     df_jovenes = df_ranking[df_ranking['edad'] <= 22]
     ganador_joya = df_jovenes.nlargest(1, 'Indice_Barca_Final').iloc[0] if not df_jovenes.empty else df_ranking.iloc[0]
-    
-    # 5. Motor (El que más Minutos juega)
     ganador_motor = df_ranking.nlargest(1, 'minutos').iloc[0] if 'minutos' in df_ranking.columns else df_ranking.iloc[0]
 
-    # --- FUNCIÓN PARA DIBUJAR LA TARJETA ---
     def dibujar_tarjeta(icono, titulo, jugador_row, nombre_stat, valor_stat, color_borde):
         foto_base64 = get_img_html(obtener_ruta_foto(jugador_row['jugador']))
-        
         tarjeta_html = f"""
         <div style="background: rgba(0,0,0,0.5); border: 2px solid {color_borde}; border-radius: 15px; padding: 25px 15px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.4); margin-bottom: 20px;">
             <div style="font-size: 3.5rem; margin-bottom: 5px;">{icono}</div>
@@ -345,28 +342,104 @@ with tab4:
         """
         st.markdown(tarjeta_html, unsafe_allow_html=True)
 
-    # --- DIBUJAR LA CUADRÍCULA DE TARJETAS ---
     col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        dibujar_tarjeta("🎯", "Francotirador", ganador_francotirador, "Goles (Últimos 5 años)", int(ganador_francotirador.get('Goles_5_y', 0)), BARCA_RED)
-    
-    with col2:
-        dibujar_tarjeta("🎩", "El Mago", ganador_mago, "Oportunidades Creadas", round(ganador_mago.get('oport_creadas', 0), 2), BARCA_YELLOW)
-        
-    with col3:
-        dibujar_tarjeta("🐙", "El Pulpo", ganador_pulpo, "Balones Recuperados", round(ganador_pulpo.get('recuperaciones', 0), 2), BARCA_BLUE)
+    with col1: dibujar_tarjeta("🎯", "Francotirador", ganador_francotirador, "Goles (Últimos 5 años)", int(ganador_francotirador.get('Goles_5_y', 0)), BARCA_RED)
+    with col2: dibujar_tarjeta("🎩", "El Mago", ganador_mago, "Oportunidades Creadas", round(ganador_mago.get('oport_creadas', 0), 2), BARCA_YELLOW)
+    with col3: dibujar_tarjeta("🐙", "El Pulpo", ganador_pulpo, "Balones Recuperados", round(ganador_pulpo.get('recuperaciones', 0), 2), BARCA_BLUE)
 
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # Fila de abajo centrada (truco de columnas)
     _, col4, col5, _ = st.columns([1, 2, 2, 1])
+    with col4: dibujar_tarjeta("💎", "La Joya", ganador_joya, f"Score Barça ({ganador_joya.get('edad', '-')} años)", round(ganador_joya.get('Indice_Barca_Final', 0), 1), "#00FF7F")
+    with col5: dibujar_tarjeta("🏃", "El Motor", ganador_motor, "Minutos Jugados", int(ganador_motor.get('minutos', 0)), "#FF4500")
+
+
+# ==================================
+# PESTAÑA 5: BUSCADOR DE CLONES (NUEVO)
+# ==================================
+with tab5:
+    st.header("🧬 Buscador de Clones (Machine Learning)")
+    st.markdown("Usando **Similitud del Coseno**, cruzamos todas las estadísticas (xG, asistencias, creación, recuperaciones) de las estrellas mundiales para encontrar a sus espejos exactos en tu base de datos.")
     
-    with col4:
-        dibujar_tarjeta("💎", "La Joya", ganador_joya, f"Score Barça ({ganador_joya.get('edad', '-')} años)", round(ganador_joya.get('Indice_Barca_Final', 0), 1), "#00FF7F") # Verde esmeralda
+    if df_top5_data.empty:
+        st.warning("⚠️ No se ha encontrado el archivo `dataset_top5.csv`. Asegúrate de subirlo a GitHub.")
+    else:
+        # Selector de jugador
+        jugador_elite = st.selectbox("🌟 Selecciona la Estrella a clonar:", df_top5_data['jugador'].tolist())
+        st.markdown("---")
         
-    with col5:
-        dibujar_tarjeta("🏃", "El Motor", ganador_motor, "Minutos Jugados", int(ganador_motor.get('minutos', 0)), "#FF4500") # Naranja fuego
+        # 1. Buscar métricas numéricas comunes entre el dataset_top5 y tu main DB
+        cols_comunes = [c for c in df_top5_data.columns if c in df.columns and c != 'jugador' and pd.api.types.is_numeric_dtype(df_top5_data[c])]
+        
+        if cols_comunes:
+            # 2. Rellenar vacíos con 0
+            df_calc = df[cols_comunes].fillna(0)
+            df_t5_calc = df_top5_data[cols_comunes].fillna(0)
+            
+            # 3. Escalar ambos datasets con la misma escala para compararlos de forma justa
+            data_to_scale = pd.concat([df_calc, df_t5_calc])
+            scaler_clones = MinMaxScaler()
+            scaled_data = scaler_clones.fit_transform(data_to_scale)
+            
+            df_scaled = scaled_data[:len(df_calc)]
+            t5_scaled = scaled_data[len(df_calc):]
+            
+            # 4. Aislar el vector de la estrella seleccionada
+            idx_elite = df_top5_data[df_top5_data['jugador'] == jugador_elite].index[0]
+            vector_elite = t5_scaled[idx_elite].reshape(1, -1)
+            
+            # 5. Calcular similitud matemática contra toda tu base de datos
+            similitudes = cosine_similarity(df_scaled, vector_elite).flatten()
+            
+            df_clones = df.copy()
+            df_clones['Similitud'] = similitudes * 100
+            
+            # 6. Seguro anti-duplicados: Si seleccionas a Harry Kane, evitamos que te muestre al Harry Kane de tu DB.
+            apellido = limpiar_nombre(jugador_elite).split()[-1]
+            df_clones = df_clones[~df_clones['jugador'].apply(lambda x: apellido in limpiar_nombre(x))]
+            
+            # 7. Obtener los 3 con mayor porcentaje
+            top3 = df_clones.sort_values(by='Similitud', ascending=False).head(3)
+            
+            # --- DISEÑO DEL ESPACIO VISUAL (MOLDE VS CLONES) ---
+            col_target, col_c1, col_c2, col_c3 = st.columns(4)
+            
+            # Tarjeta de la Estrella
+            with col_target:
+                st.markdown("<h4 style='text-align: center; color: #FFF;'>🌟 MOLDE IDEAL</h4>", unsafe_allow_html=True)
+                foto_t = get_img_html(obtener_ruta_foto(jugador_elite))
+                tarjeta_html_t = f"""
+                <div style="background: rgba(165,0,68,0.7); border: 2px solid {BARCA_YELLOW}; border-radius: 15px; padding: 25px 15px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.5);">
+                    <img src="{foto_t}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: 4px solid {BARCA_YELLOW}; margin-bottom: 15px; background-color: #fff;">
+                    <h3 style="color: white; margin: 0; font-size: 1.5rem;">{jugador_elite}</h3>
+                    <p style="color: {BARCA_YELLOW}; margin-top: 5px; font-weight: bold;">Élite Mundial</p>
+                </div>
+                """
+                st.markdown(tarjeta_html_t, unsafe_allow_html=True)
+                
+            # Tarjetas de los Clones
+            for i, (idx, row) in enumerate(top3.iterrows()):
+                col_c = [col_c1, col_c2, col_c3][i]
+                with col_c:
+                    medalla = ["🥇 Clon #1", "🥈 Clon #2", "🥉 Clon #3"][i]
+                    st.markdown(f"<h4 style='text-align: center; color: #FFF;'>{medalla}</h4>", unsafe_allow_html=True)
+                    
+                    foto_c = get_img_html(obtener_ruta_foto(row['jugador']))
+                    sim = row['Similitud']
+                    
+                    # Colores dinámicos: Verde brillante para más de 85%, Plata para más de 75%, Azul para el resto.
+                    color_c = "#00FF7F" if sim >= 85 else ("#C0C0C0" if sim >= 75 else BARCA_BLUE)
+                    
+                    tarjeta_html_c = f"""
+                    <div style="background: rgba(0,0,0,0.5); border: 2px solid {color_c}; border-radius: 15px; padding: 25px 15px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.4);">
+                        <h3 style="color: {color_c}; margin: 0 0 15px 0; font-size: 1.6rem;">{sim:.1f}% Match</h3>
+                        <img src="{foto_c}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: 4px solid {color_c}; margin-bottom: 15px; background-color: #fff;">
+                        <h3 style="color: white; margin: 0 0 10px 0; font-size: 1.4rem;">{row['jugador']}</h3>
+                        <p style="color: #ccc; font-size: 0.9rem; margin: 0;">{row['edad']} años | Score: {row['Indice_Barca_Final']:.1f}</p>
+                    </div>
+                    """
+                    st.markdown(tarjeta_html_c, unsafe_allow_html=True)
+        else:
+            st.warning("No he encontrado estadísticas suficientes en común entre los Excels para poder compararlos.")
 
 
 
