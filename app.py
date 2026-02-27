@@ -93,13 +93,18 @@ def load_data():
                 # Columnas a traernos del excel de goles
                 cols_goles = ['match_name', 'Goles_5_y', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
                 
+                # Debug: ver cuántos matches tenemos
+                matches = df_main['match_name'].isin(df_goles['match_name']).sum()
+                print(f"✓ Matches encontrados: {matches} de {len(df_main)}")
+                
                 df = pd.merge(df_main, df_goles[cols_goles], on='match_name', how='left')
                 df = df.drop(columns=['match_name'])
                 
                 # Rellenamos huecos con 0 si algún jugador no tiene datos
-                df['Goles_5_y'] = df['Goles_5_y'].fillna(0)
+                df['Goles_5_y'] = df['Goles_5_y'].fillna(0).astype(int)
                 for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']:
-                    df[col] = df[col].fillna(0)
+                    if col in df.columns:
+                        df[col] = df[col].fillna(0).astype(int)
             except Exception as e:
                 print(f"Error en merge de goles: {e}")
                 df = df_main
