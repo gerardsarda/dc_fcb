@@ -68,9 +68,14 @@ def limpiar_nombre(nombre):
 @st.cache_data
 def load_data():
     try:
-        df_main = pd.read_csv("dataset_fcb_actualizado_con_goles.csv")
+        # Obtener el directorio del script actual
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        path_main = os.path.join(script_dir, "dataset_fcb_actualizado_con_goles.csv")
+        path_goles = os.path.join(script_dir, "evolucio_gols_dc.csv")
+        
+        df_main = pd.read_csv(path_main)
         try:
-            df_goles = pd.read_csv("evolucio_gols_dc.csv")
+            df_goles = pd.read_csv(path_goles)
             
             # Limpiamos nombres para unirlos perfectamente
             df_main['match_name'] = df_main['jugador'].apply(limpiar_nombre)
