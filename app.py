@@ -68,7 +68,6 @@ def limpiar_nombre(nombre):
 @st.cache_data
 def load_data():
     try:
-        # Obtener el directorio del script actual
         script_dir = os.path.dirname(os.path.abspath(__file__))
         path_main = os.path.join(script_dir, "dataset_fcb_actualizado_con_goles.csv")
         path_goles = os.path.join(script_dir, "evolucio_gols_dc.csv")
@@ -79,41 +78,33 @@ def load_data():
         if os.path.exists(path_goles):
             try:
                 df_goles = pd.read_csv(path_goles)
+                df_goles.columns = df_goles.columns.str.strip() # Limpiar espacios invisibles por si acaso
             except Exception as e:
                 print(f"Error cargando archivo de goles: {e}")
                 df_goles = None
         
-        # Si tenemos archivo de goles, hacemos el merge
         if df_goles is not None:
             try:
-                # Limpiamos nombres para unirlos perfectamente
                 df_main['match_name'] = df_main['jugador'].apply(limpiar_nombre)
                 df_goles['match_name'] = df_goles['Jugadores'].apply(limpiar_nombre)
                 
-                # Columnas a traernos del excel de goles
-                cols_goles = ['match_name', 'Goles_5_y', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
-                
-                # Debug: ver cuántos matches tenemos
-                matches = df_main['match_name'].isin(df_goles['match_name']).sum()
-                print(f"✓ Matches encontrados: {matches} de {len(df_main)}")
+                # ¡EL FIX! Solo traemos las temporadas. NO traemos Goles_5_y porque ya está en tu df_main.
+                cols_goles = ['match_name', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
                 
                 df = pd.merge(df_main, df_goles[cols_goles], on='match_name', how='left')
                 df = df.drop(columns=['match_name'])
                 
                 # Rellenamos huecos con 0 si algún jugador no tiene datos
-                df['Goles_5_y'] = df['Goles_5_y'].fillna(0).astype(int)
                 for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']:
                     if col in df.columns:
                         df[col] = df[col].fillna(0).astype(int)
             except Exception as e:
                 print(f"Error en merge de goles: {e}")
                 df = df_main
-                df['Goles_5_y'] = 0
                 for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: 
                     df[col] = 0
         else:
             df = df_main
-            df['Goles_5_y'] = 0
             for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: df[col] = 0
             
         return df
@@ -161,12 +152,10 @@ with tab1:
     st.header("🏆 Clasificación Definitiva")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Creamos un diseño de lista con tarjetas en HTML/CSS
     for i, row in df_ranking.head(10).iterrows():
         puntos = row['Indice_Barca_Final']
         jugador = row['jugador']
         
-        # Color diferente para el Top 1 (Oro), Top 2 (Plata), Top 3 (Bronce) y el resto
         if i == 0: color_borde = "#FFD700" # Oro
         elif i == 1: color_borde = "#C0C0C0" # Plata
         elif i == 2: color_borde = "#CD7F32" # Bronce
@@ -226,7 +215,6 @@ with tab3:
 
     st.markdown("---")
 
-    # --- FOTOS ---
     col_img1, col_img2 = st.columns(2)
     silueta_default = "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
     
@@ -247,7 +235,6 @@ with tab3:
         _, c2, _ = st.columns([1, 2, 1])
         with c2: st.image(obtener_ruta_foto(jugador2), use_container_width=True, caption=jugador2)
 
-    # --- VELOCÍMETROS (AHORA MÁS GRANDES) ---
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         fig_g1 = go.Figure(go.Indicator(
@@ -255,7 +242,6 @@ with tab3:
             title = {'text': f"Puntos Barça", 'font': {'color': 'white'}},
             gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': BARCA_RED}}
         ))
-        # Ajustamos height y margin para que no se corten los números
         fig_g1.update_layout(height=350, margin=dict(l=40, r=40, t=50, b=40), paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
         st.plotly_chart(fig_g1, use_container_width=True)
         
@@ -270,16 +256,13 @@ with tab3:
 
     st.markdown("---")
 
-    # --- NUEVO: GRÁFICO DE LÍNEAS DE EVOLUCIÓN GOLEADORA ---
     st.subheader("📈 Evolución Goleadora (Últimas 5 Temporadas)")
     temporadas = ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
     
-    # Comprobamos que existan las columnas para no dar error
     if all(temp in df.columns for temp in temporadas):
         goles_p1 = p1_data[temporadas].tolist()
         goles_p2 = p2_data[temporadas].tolist()
         
-        # Preparamos los datos para Plotly Line Chart
         df_lineas = pd.DataFrame({
             'Temporada': temporadas + temporadas,
             'Goles': goles_p1 + goles_p2,
@@ -290,16 +273,15 @@ with tab3:
                            color_discrete_sequence=[BARCA_RED, BARCA_BLUE],
                            labels={'Goles': 'Goles Marcados', 'Temporada': 'Temporada'})
         
-        # Estética de la línea y marcadores
         fig_line.update_traces(line=dict(width=4), marker=dict(size=10, line=dict(width=2, color='white')))
-        fig_line.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'), hovermode="x unified")
+        # Se añade rangemode="tozero" para que el gráfico no engañe con el eje Y
+        fig_line.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'), hovermode="x unified", yaxis=dict(rangemode="tozero"))
         st.plotly_chart(fig_line, use_container_width=True)
     else:
         st.info("No hay datos de evolución por temporadas disponibles para estos jugadores.")
 
     st.markdown("---")
 
-    # --- RADAR ---
     col_rad, col_sca = st.columns(2)
     with col_rad:
         st.subheader("Radar de Perfil")
@@ -335,6 +317,9 @@ with tab3:
             
             fig_xgxa.update_layout(xaxis_title="Goles Esperados (xG)", yaxis_title="Asistencias Esperadas (xA)", showlegend=False, margin=dict(l=10, r=10, t=30, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
             st.plotly_chart(fig_xgxa, use_container_width=True)
+
+            
+
 
 
 
