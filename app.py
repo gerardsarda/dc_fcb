@@ -115,7 +115,6 @@ def load_top5_data():
             df_t5 = pd.read_csv(path_top5)
             df_t5.columns = df_t5.columns.str.strip()
             
-            # Renombrar columnas para asegurar que matchean con las de tu BD principal
             rename_dict = {
                 'grandes_oport_creadas': 'gr_oport_creadas',
                 'regates_realizados_pct': 'regates_pct',
@@ -123,7 +122,6 @@ def load_top5_data():
             }
             df_t5 = df_t5.rename(columns=rename_dict)
             
-            # Transformar formato europeo a Python (quitar % y cambiar , por .)
             for col in df_t5.columns:
                 if col != 'jugador':
                     df_t5[col] = df_t5[col].astype(str).str.replace('%', '').str.replace(',', '.').astype(float)
@@ -168,11 +166,23 @@ df_ranking = df.sort_values(by='Indice_Barca_Final', ascending=False).reset_inde
 silueta_default = "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
 
 def obtener_ruta_foto(nombre):
-    nombre_formateado = limpiar_nombre(nombre).replace(" ", "_")
+    # DICCIONARIO TRADUCTOR AUTOMÁTICO PARA EL TOP 5
+    diccionario_top5 = {
+        "K. Mbappé": "Kylian Mbappe",
+        "E. Haaland": "Erling Haaland",
+        "H. Kane": "Harry Kane",
+        "V. Osimhen": "Victor Osimhen",
+        "H. Ekitike": "Hugo Ekitike"
+    }
+    
+    # Si el nombre viene abreviado, coge el nombre completo del diccionario
+    nombre_final = diccionario_top5.get(nombre, nombre)
+    
+    nombre_formateado = limpiar_nombre(nombre_final).replace(" ", "_")
     for ext in ['.png', '.jpg', '.jpeg']:
         ruta_formateada = f"fotos/{nombre_formateado}{ext}"
         if os.path.exists(ruta_formateada): return ruta_formateada
-        ruta_original = f"fotos/{nombre.strip()}{ext}"
+        ruta_original = f"fotos/{nombre_final.strip()}{ext}"
         if os.path.exists(ruta_original): return ruta_original
     return silueta_default
 
@@ -185,7 +195,6 @@ def get_img_html(ruta):
         return silueta_default
 
 # --- 4. ESTRUCTURA DE PESTAÑAS (TABS) ---
-# ¡Aquí añadimos la nueva pestaña 5!
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 Ranking", "📈 Gráficos", "⚔️ Cara a Cara", "🏅 Insignias", "🧬 Clonador Perfiles"])
 
 # ==================================
@@ -311,7 +320,6 @@ with tab3:
             fig_xgxa.update_layout(xaxis_title="Goles Esperados (xG)", yaxis_title="Asistencias Esperadas (xA)", showlegend=False, margin=dict(l=10, r=10, t=30, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
             st.plotly_chart(fig_xgxa, use_container_width=True)
 
-
 # ==================================
 # PESTAÑA 4: INSIGNIAS
 # ==================================
@@ -352,9 +360,8 @@ with tab4:
     with col4: dibujar_tarjeta("💎", "La Joya", ganador_joya, f"Score Barça ({ganador_joya.get('edad', '-')} años)", round(ganador_joya.get('Indice_Barca_Final', 0), 1), "#00FF7F")
     with col5: dibujar_tarjeta("🏃", "El Motor", ganador_motor, "Minutos Jugados", int(ganador_motor.get('minutos', 0)), "#FF4500")
 
-
 # ==================================
-# PESTAÑA 5: BUSCADOR DE CLONES (NUEVO)
+# PESTAÑA 5: BUSCADOR DE CLONES
 # ==================================
 with tab5:
     st.header("🧬 Buscador de Clones (Machine Learning)")
@@ -363,19 +370,15 @@ with tab5:
     if df_top5_data.empty:
         st.warning("⚠️ No se ha encontrado el archivo `dataset_top5.csv`. Asegúrate de subirlo a GitHub.")
     else:
-        # Selector de jugador
         jugador_elite = st.selectbox("🌟 Selecciona la Estrella a clonar:", df_top5_data['jugador'].tolist())
         st.markdown("---")
         
-        # 1. Buscar métricas numéricas comunes entre el dataset_top5 y tu main DB
         cols_comunes = [c for c in df_top5_data.columns if c in df.columns and c != 'jugador' and pd.api.types.is_numeric_dtype(df_top5_data[c])]
         
         if cols_comunes:
-            # 2. Rellenar vacíos con 0
             df_calc = df[cols_comunes].fillna(0)
             df_t5_calc = df_top5_data[cols_comunes].fillna(0)
             
-            # 3. Escalar ambos datasets con la misma escala para compararlos de forma justa
             data_to_scale = pd.concat([df_calc, df_t5_calc])
             scaler_clones = MinMaxScaler()
             scaled_data = scaler_clones.fit_transform(data_to_scale)
@@ -383,27 +386,21 @@ with tab5:
             df_scaled = scaled_data[:len(df_calc)]
             t5_scaled = scaled_data[len(df_calc):]
             
-            # 4. Aislar el vector de la estrella seleccionada
             idx_elite = df_top5_data[df_top5_data['jugador'] == jugador_elite].index[0]
             vector_elite = t5_scaled[idx_elite].reshape(1, -1)
             
-            # 5. Calcular similitud matemática contra toda tu base de datos
             similitudes = cosine_similarity(df_scaled, vector_elite).flatten()
             
             df_clones = df.copy()
             df_clones['Similitud'] = similitudes * 100
             
-            # 6. Seguro anti-duplicados: Si seleccionas a Harry Kane, evitamos que te muestre al Harry Kane de tu DB.
             apellido = limpiar_nombre(jugador_elite).split()[-1]
             df_clones = df_clones[~df_clones['jugador'].apply(lambda x: apellido in limpiar_nombre(x))]
             
-            # 7. Obtener los 3 con mayor porcentaje
             top3 = df_clones.sort_values(by='Similitud', ascending=False).head(3)
             
-            # --- DISEÑO DEL ESPACIO VISUAL (MOLDE VS CLONES) ---
             col_target, col_c1, col_c2, col_c3 = st.columns(4)
             
-            # Tarjeta de la Estrella
             with col_target:
                 st.markdown("<h4 style='text-align: center; color: #FFF;'>🌟 MOLDE IDEAL</h4>", unsafe_allow_html=True)
                 foto_t = get_img_html(obtener_ruta_foto(jugador_elite))
@@ -416,7 +413,6 @@ with tab5:
                 """
                 st.markdown(tarjeta_html_t, unsafe_allow_html=True)
                 
-            # Tarjetas de los Clones
             for i, (idx, row) in enumerate(top3.iterrows()):
                 col_c = [col_c1, col_c2, col_c3][i]
                 with col_c:
@@ -426,7 +422,6 @@ with tab5:
                     foto_c = get_img_html(obtener_ruta_foto(row['jugador']))
                     sim = row['Similitud']
                     
-                    # Colores dinámicos: Verde brillante para más de 85%, Plata para más de 75%, Azul para el resto.
                     color_c = "#00FF7F" if sim >= 85 else ("#C0C0C0" if sim >= 75 else BARCA_BLUE)
                     
                     tarjeta_html_c = f"""
@@ -440,8 +435,7 @@ with tab5:
                     st.markdown(tarjeta_html_c, unsafe_allow_html=True)
         else:
             st.warning("No he encontrado estadísticas suficientes en común entre los Excels para poder compararlos.")
-
-
+            
 
 
 
