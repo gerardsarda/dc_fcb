@@ -70,7 +70,7 @@ def load_data():
     try:
         df_main = pd.read_csv("dataset_fcb_actualizado_con_goles.csv")
         try:
-            df_goles = pd.read_csv("evolucio_gols_dc - Full 1.csv")
+            df_goles = pd.read_csv("evolucio_gols_dc.csv")
             
             # Limpiamos nombres para unirlos perfectamente
             df_main['match_name'] = df_main['jugador'].apply(limpiar_nombre)
