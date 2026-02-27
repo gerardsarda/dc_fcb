@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 import unicodedata
+import base64
 
 # --- 1. CONFIGURACIÓN Y CSS (Fondo Degradado) ---
 st.set_page_config(page_title="Dashboard Scouting Barça", layout="wide", page_icon="🔵🔴")
@@ -78,7 +79,7 @@ def load_data():
         if os.path.exists(path_goles):
             try:
                 df_goles = pd.read_csv(path_goles)
-                df_goles.columns = df_goles.columns.str.strip() # Limpiar espacios invisibles por si acaso
+                df_goles.columns = df_goles.columns.str.strip()
             except Exception as e:
                 print(f"Error cargando archivo de goles: {e}")
                 df_goles = None
@@ -88,21 +89,18 @@ def load_data():
                 df_main['match_name'] = df_main['jugador'].apply(limpiar_nombre)
                 df_goles['match_name'] = df_goles['Jugadores'].apply(limpiar_nombre)
                 
-                # ¡EL FIX! Solo traemos las temporadas. NO traemos Goles_5_y porque ya está en tu df_main.
                 cols_goles = ['match_name', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
                 
                 df = pd.merge(df_main, df_goles[cols_goles], on='match_name', how='left')
                 df = df.drop(columns=['match_name'])
                 
-                # Rellenamos huecos con 0 si algún jugador no tiene datos
                 for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']:
                     if col in df.columns:
                         df[col] = df[col].fillna(0).astype(int)
             except Exception as e:
                 print(f"Error en merge de goles: {e}")
                 df = df_main
-                for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: 
-                    df[col] = 0
+                for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: df[col] = 0
         else:
             df = df_main
             for col in ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']: df[col] = 0
@@ -142,11 +140,34 @@ df['Indice_Barca_Final'] = MinMaxScaler(feature_range=(0, 100)).fit_transform(df
 
 df_ranking = df.sort_values(by='Indice_Barca_Final', ascending=False).reset_index(drop=True)
 
+# --- FUNCIONES PARA FOTOS Y TARJETAS ---
+silueta_default = "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
+
+def obtener_ruta_foto(nombre):
+    nombre_formateado = limpiar_nombre(nombre).replace(" ", "_")
+    for ext in ['.png', '.jpg', '.jpeg']:
+        ruta_formateada = f"fotos/{nombre_formateado}{ext}"
+        if os.path.exists(ruta_formateada): return ruta_formateada
+        ruta_original = f"fotos/{nombre.strip()}{ext}"
+        if os.path.exists(ruta_original): return ruta_original
+    return silueta_default
+
+# Función para incrustar la foto local en un HTML (Base64)
+def get_img_html(ruta):
+    if ruta.startswith("http"):
+        return ruta
+    try:
+        with open(ruta, "rb") as img_file:
+            encoded = base64.b64encode(img_file.read()).decode()
+            return f"data:image/png;base64,{encoded}"
+    except:
+        return silueta_default
+
 # --- 4. ESTRUCTURA DE PESTAÑAS (TABS) ---
-tab1, tab2, tab3 = st.tabs(["🏆 Ranking Top Fichajes", "📈 Gráficos e Insights", "⚔️ Cara a Cara (1vs1)"])
+tab1, tab2, tab3, tab4 = st.tabs(["🏆 Ranking", "📈 Gráficos", "⚔️ Cara a Cara", "🏅 Insignias"])
 
 # ==================================
-# PESTAÑA 1: RANKING (ESTILO LEADERBOARD)
+# PESTAÑA 1: RANKING
 # ==================================
 with tab1:
     st.header("🏆 Clasificación Definitiva")
@@ -156,9 +177,9 @@ with tab1:
         puntos = row['Indice_Barca_Final']
         jugador = row['jugador']
         
-        if i == 0: color_borde = "#FFD700" # Oro
-        elif i == 1: color_borde = "#C0C0C0" # Plata
-        elif i == 2: color_borde = "#CD7F32" # Bronce
+        if i == 0: color_borde = "#FFD700"
+        elif i == 1: color_borde = "#C0C0C0"
+        elif i == 2: color_borde = "#CD7F32"
         else: color_borde = BARCA_BLUE
             
         st.markdown(f"""
@@ -204,8 +225,7 @@ with tab3:
     st.header("⚔️ Comparativa Directa")
     
     col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        jugador1 = st.selectbox("🔴 Jugador 1", df_ranking['jugador'].tolist(), index=0)
+    with col_s1: jugador1 = st.selectbox("🔴 Jugador 1", df_ranking['jugador'].tolist(), index=0)
     with col_s2:
         idx_j2 = 1 if len(df_ranking) > 1 else 0
         jugador2 = st.selectbox("🔵 Jugador 2", df_ranking['jugador'].tolist(), index=idx_j2)
@@ -216,41 +236,20 @@ with tab3:
     st.markdown("---")
 
     col_img1, col_img2 = st.columns(2)
-    silueta_default = "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
-    
-    def obtener_ruta_foto(nombre):
-        nombre_formateado = limpiar_nombre(nombre).replace(" ", "_")
-        for ext in ['.png', '.jpg', '.jpeg']:
-            ruta_formateada = f"fotos/{nombre_formateado}{ext}"
-            if os.path.exists(ruta_formateada): return ruta_formateada
-            ruta_original = f"fotos/{nombre.strip()}{ext}"
-            if os.path.exists(ruta_original): return ruta_original
-        return silueta_default
-
     with col_img1:
         _, c1, _ = st.columns([1, 2, 1])
         with c1: st.image(obtener_ruta_foto(jugador1), use_container_width=True, caption=jugador1)
-
     with col_img2:
         _, c2, _ = st.columns([1, 2, 1])
         with c2: st.image(obtener_ruta_foto(jugador2), use_container_width=True, caption=jugador2)
 
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        fig_g1 = go.Figure(go.Indicator(
-            mode = "gauge+number", value = p1_data['Indice_Barca_Final'],
-            title = {'text': f"Puntos Barça", 'font': {'color': 'white'}},
-            gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': BARCA_RED}}
-        ))
+        fig_g1 = go.Figure(go.Indicator(mode = "gauge+number", value = p1_data['Indice_Barca_Final'], title = {'text': f"Puntos Barça", 'font': {'color': 'white'}}, gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': BARCA_RED}}))
         fig_g1.update_layout(height=350, margin=dict(l=40, r=40, t=50, b=40), paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
         st.plotly_chart(fig_g1, use_container_width=True)
-        
     with col_g2:
-        fig_g2 = go.Figure(go.Indicator(
-            mode = "gauge+number", value = p2_data['Indice_Barca_Final'],
-            title = {'text': f"Puntos Barça", 'font': {'color': 'white'}},
-            gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': BARCA_BLUE}}
-        ))
+        fig_g2 = go.Figure(go.Indicator(mode = "gauge+number", value = p2_data['Indice_Barca_Final'], title = {'text': f"Puntos Barça", 'font': {'color': 'white'}}, gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': BARCA_BLUE}}))
         fig_g2.update_layout(height=350, margin=dict(l=40, r=40, t=50, b=40), paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
         st.plotly_chart(fig_g2, use_container_width=True)
 
@@ -258,23 +257,12 @@ with tab3:
 
     st.subheader("📈 Evolución Goleadora (Últimas 5 Temporadas)")
     temporadas = ['2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
-    
     if all(temp in df.columns for temp in temporadas):
         goles_p1 = p1_data[temporadas].tolist()
         goles_p2 = p2_data[temporadas].tolist()
-        
-        df_lineas = pd.DataFrame({
-            'Temporada': temporadas + temporadas,
-            'Goles': goles_p1 + goles_p2,
-            'Jugador': [jugador1]*5 + [jugador2]*5
-        })
-        
-        fig_line = px.line(df_lineas, x='Temporada', y='Goles', color='Jugador', markers=True, 
-                           color_discrete_sequence=[BARCA_RED, BARCA_BLUE],
-                           labels={'Goles': 'Goles Marcados', 'Temporada': 'Temporada'})
-        
+        df_lineas = pd.DataFrame({'Temporada': temporadas + temporadas, 'Goles': goles_p1 + goles_p2, 'Jugador': [jugador1]*5 + [jugador2]*5})
+        fig_line = px.line(df_lineas, x='Temporada', y='Goles', color='Jugador', markers=True, color_discrete_sequence=[BARCA_RED, BARCA_BLUE], labels={'Goles': 'Goles Marcados', 'Temporada': 'Temporada'})
         fig_line.update_traces(line=dict(width=4), marker=dict(size=10, line=dict(width=2, color='white')))
-        # Se añade rangemode="tozero" para que el gráfico no engañe con el eje Y
         fig_line.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'), hovermode="x unified", yaxis=dict(rangemode="tozero"))
         st.plotly_chart(fig_line, use_container_width=True)
     else:
@@ -287,23 +275,19 @@ with tab3:
         st.subheader("Radar de Perfil")
         radar_cols = ['xg', 'xa', 'oport_creadas', 'regates_pct', 'recuperaciones', 'toques_area_rival']
         nombres_ejes = ['Goles Esp. (xG)', 'Asist. Esp. (xA)', 'Creación', 'Regate %', 'Recuperaciones', 'Toques Área']
-        
         radar_cols_validas = [c for c in radar_cols if c in df.columns]
         
         if radar_cols_validas:
             df_percentiles = df[radar_cols_validas].rank(pct=True) * 100
             df_percentiles['jugador'] = df['jugador']
-            
             p1_radar = df_percentiles[df_percentiles['jugador'] == jugador1].iloc[0][radar_cols_validas].tolist()
             p2_radar = df_percentiles[df_percentiles['jugador'] == jugador2].iloc[0][radar_cols_validas].tolist()
-            
             p1_radar += p1_radar[:1]; p2_radar += p2_radar[:1]
             ejes_validos = [nombres_ejes[radar_cols.index(c)] for c in radar_cols_validas] + [nombres_ejes[radar_cols.index(radar_cols_validas[0])]]
             
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=p1_radar, theta=ejes_validos, fill='toself', name=jugador1, line_color=BARCA_RED, fillcolor='rgba(165, 0, 68, 0.6)'))
             fig_radar.add_trace(go.Scatterpolar(r=p2_radar, theta=ejes_validos, fill='toself', name=jugador2, line_color=BARCA_BLUE, fillcolor='rgba(0, 77, 152, 0.6)'))
-            
             fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100]), bgcolor='rgba(255, 255, 255, 0.9)'), showlegend=True, margin=dict(l=30, r=30, t=30, b=30), paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
             st.plotly_chart(fig_radar, use_container_width=True)
 
@@ -314,11 +298,77 @@ with tab3:
             fig_xgxa.add_trace(go.Scatter(x=df_ranking['xg'], y=df_ranking['xa'], mode='markers', marker=dict(size=8, color='white', opacity=0.3), hovertext=df_ranking['jugador'], name="Resto"))
             fig_xgxa.add_trace(go.Scatter(x=[p1_data['xg']], y=[p1_data['xa']], mode='markers+text', text=[jugador1], textposition='top center', marker=dict(size=18, color=BARCA_RED, line=dict(width=2, color=BARCA_YELLOW)), name=jugador1))
             fig_xgxa.add_trace(go.Scatter(x=[p2_data['xg']], y=[p2_data['xa']], mode='markers+text', text=[jugador2], textposition='bottom center', marker=dict(size=18, color=BARCA_BLUE, line=dict(width=2, color=BARCA_YELLOW)), name=jugador2))
-            
             fig_xgxa.update_layout(xaxis_title="Goles Esperados (xG)", yaxis_title="Asistencias Esperadas (xA)", showlegend=False, margin=dict(l=10, r=10, t=30, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0.4)', font=dict(color='white'))
             st.plotly_chart(fig_xgxa, use_container_width=True)
 
-            
+
+# ==================================
+# PESTAÑA 4: INSIGNIAS (NUEVO)
+# ==================================
+with tab4:
+    st.header("🏅 Salón de Insignias")
+    st.markdown("El algoritmo ha analizado toda la base de datos para premiar a los perfiles más puros en cada estilo de juego.", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- CÁLCULO DE LOS GANADORES ---
+    # 1. Francotirador (El que más Goles históricos tiene)
+    ganador_francotirador = df_ranking.nlargest(1, 'Goles_5_y').iloc[0] if 'Goles_5_y' in df_ranking.columns else df_ranking.iloc[0]
+    
+    # 2. Mago (El que más Oportunidades crea)
+    ganador_mago = df_ranking.nlargest(1, 'oport_creadas').iloc[0] if 'oport_creadas' in df_ranking.columns else df_ranking.iloc[0]
+    
+    # 3. Pulpo (El que más Balones recupera)
+    ganador_pulpo = df_ranking.nlargest(1, 'recuperaciones').iloc[0] if 'recuperaciones' in df_ranking.columns else df_ranking.iloc[0]
+    
+    # 4. Joya (El de mayor Score del Barça con 22 años o menos)
+    df_jovenes = df_ranking[df_ranking['edad'] <= 22]
+    ganador_joya = df_jovenes.nlargest(1, 'Indice_Barca_Final').iloc[0] if not df_jovenes.empty else df_ranking.iloc[0]
+    
+    # 5. Motor (El que más Minutos juega)
+    ganador_motor = df_ranking.nlargest(1, 'minutos').iloc[0] if 'minutos' in df_ranking.columns else df_ranking.iloc[0]
+
+    # --- FUNCIÓN PARA DIBUJAR LA TARJETA ---
+    def dibujar_tarjeta(icono, titulo, jugador_row, nombre_stat, valor_stat, color_borde):
+        foto_base64 = get_img_html(obtener_ruta_foto(jugador_row['jugador']))
+        
+        tarjeta_html = f"""
+        <div style="background: rgba(0,0,0,0.5); border: 2px solid {color_borde}; border-radius: 15px; padding: 25px 15px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.4); margin-bottom: 20px;">
+            <div style="font-size: 3.5rem; margin-bottom: 5px;">{icono}</div>
+            <h3 style="color: {color_borde}; margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 2px; font-size: 1.2rem;">{titulo}</h3>
+            <img src="{foto_base64}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: 4px solid {color_borde}; margin-bottom: 15px; background-color: #fff;">
+            <h2 style="color: white; margin: 0 0 10px 0; font-size: 1.6rem;">{jugador_row['jugador']}</h2>
+            <div style="background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 10px;">
+                <p style="color: #ccc; font-size: 0.9rem; margin: 0;">{nombre_stat}</p>
+                <p style="color: {BARCA_YELLOW}; font-size: 1.5rem; font-weight: bold; margin: 0;">{valor_stat}</p>
+            </div>
+        </div>
+        """
+        st.markdown(tarjeta_html, unsafe_allow_html=True)
+
+    # --- DIBUJAR LA CUADRÍCULA DE TARJETAS ---
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        dibujar_tarjeta("🎯", "Francotirador", ganador_francotirador, "Goles (Últimos 5 años)", int(ganador_francotirador.get('Goles_5_y', 0)), BARCA_RED)
+    
+    with col2:
+        dibujar_tarjeta("🎩", "El Mago", ganador_mago, "Oportunidades Creadas", round(ganador_mago.get('oport_creadas', 0), 2), BARCA_YELLOW)
+        
+    with col3:
+        dibujar_tarjeta("🐙", "El Pulpo", ganador_pulpo, "Balones Recuperados", round(ganador_pulpo.get('recuperaciones', 0), 2), BARCA_BLUE)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Fila de abajo centrada (truco de columnas)
+    _, col4, col5, _ = st.columns([1, 2, 2, 1])
+    
+    with col4:
+        dibujar_tarjeta("💎", "La Joya", ganador_joya, f"Score Barça ({ganador_joya.get('edad', '-')} años)", round(ganador_joya.get('Indice_Barca_Final', 0), 1), "#00FF7F") # Verde esmeralda
+        
+    with col5:
+        dibujar_tarjeta("🏃", "El Motor", ganador_motor, "Minutos Jugados", int(ganador_motor.get('minutos', 0)), "#FF4500") # Naranja fuego
+
+
 
 
 
